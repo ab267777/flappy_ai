@@ -39,8 +39,21 @@ def image_preprocess(img):
 	#print(s_t.shape, resized.shape)
 	return s_t
 
+
+def custom_loss(fc,a,y):
+
+	# Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
+	def loss(y_true,y_pred):
+		mul = K.sum(multiply([fc,a]),axis=-1)
+		return K.mean(K.square(mul - y),axis=-1)
+   
+	# Return a function
+	return loss
+
 def network():
 	inputs = Input((80,80,4))
+	a = Input(shape=[2])
+	y = Input(shape=[1])
 	conv1 = Conv2D(filters=32, strides=4, activation='relu',padding='same',use_bias=True, 
 		kernel_size=[8,8], kernel_initializer=initializer.TruncatedNormal(stddev=0.01),
 		bias_initializer=initializer.Constant(value=0.01))(inputs)
@@ -56,7 +69,9 @@ def network():
 	fci = Flatten()(maxpool3)
 	fc1 = Dense(256, activation='relu')(fci)
 	fc2 = Dense(ACTIONS, activation='softmax')(fc1)
-	model = Model(inputs,fc2)
+
+	model = Model([inputs,a,y], fc2)
+	model.compile(optimizer='adam',loss=custom_loss(fc2,a,y), metrics=['accuracy'])
 	model.summary()
 	return model
 
@@ -68,12 +83,14 @@ def train():
 	x_t1_colored, r_t, terminal = game_state.frame_step(do_nothing)
 	image_preprocess(x_t1_colored)
 	model = network()
+
+
 	#print(x_t1_colored.shape)
 
 
 
 def main():
-    train()
+	train()
 
 if __name__ == "__main__":
 	main()

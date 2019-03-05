@@ -29,8 +29,7 @@ INITIAL_EPSILON = 0.0001 # starting value of epsilon
 REPLAY_MEMORY = 50000 # number of previous transitions to remember
 BATCH = 32 # size of minibatch
 FRAME_PER_ACTION = 1
-
-
+	
 def image_preprocess(img):
 	resized = cv2.resize(img, (80, 80))
 	gray =  np.expand_dims(cv2.transpose(cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)), axis=2)
@@ -81,9 +80,30 @@ def train():
 	do_nothing = np.zeros(2)
 	do_nothing[0] = 1
 	x_t1_colored, r_t, terminal = game_state.frame_step(do_nothing)
-	image_preprocess(x_t1_colored)
+	x = image_preprocess(x_t1_colored)
 	model = network()
-
+	D = deque()
+	epsilon = INITIAL_EPSILON
+	t = 0
+	while t < 1:
+		t += 1
+		x = np.asarray([x])
+		a = np.asarray([[1,0]])
+		y = np.asarray([[0.0]])
+		readout_t = model.predict([x,a,y])
+		print("output",readout_t)
+		a_t = np.zeros([ACTIONS])
+		action_index = 0
+		if random.random() <= epsilon:
+			print("----------Random Action----------")
+			action_index = random.randrange(ACTIONS)
+			a_t[random.randrange(ACTIONS)] = 1
+		else:
+			action_index = np.argmax(readout_t)
+			a_t[action_index] = 1
+		# scale down epsilon
+		if epsilon > FINAL_EPSILON and t > OBSERVE:
+			epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
 	#print(x_t1_colored.shape)
 

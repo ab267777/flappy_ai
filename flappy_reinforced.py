@@ -76,37 +76,70 @@ def network():
 	return model
 
 def train():
-	game_state = game.GameState()
-	do_nothing = np.zeros(2)
-	do_nothing[0] = 1
-	x_t1_colored, r_t, terminal = game_state.frame_step(do_nothing)
-	x = image_preprocess(x_t1_colored)
 	model = network()
 	D = deque()
 	epsilon = INITIAL_EPSILON
+	game_state = game.GameState()
+
+	dummy_a = np.zeros(ACTIONS)
+	dummy_a[0] = 1
+
+	x_tc, r_t, T_t = game_state.frame_step(dummy_a)
+	x_t = image_preprocess(x_tc)
+	x_tt = x_t
 	t = 0
-	while t < 1:
+	while 1:
 		t += 1
-		x = np.asarray([x])
-		a = np.asarray([[1,0]])
-		y = np.asarray([[0.0]])
-		readout_t = model.predict([x,a,y])
+		
+		x_t = np.asarray([x_tt])
 		a_t = np.zeros([ACTIONS])
+		dummy_a = np.asarray([a_t])
+		dummy_y = np.asarray([[0.0]])
 		action_index = 0
+		
+		Q_t = model.predict([x_t,dummy_a,dummy_y])[0]
+		
 		if random.random() <= epsilon:
-			print("----------Random Action----------")
-			action_index = random.randrange(ACTIONS)
 			a_t[random.randrange(ACTIONS)] = 1
 		else:
-			action_index = np.argmax(readout_t)
-			a_t[action_index] = 1
-		# scale down epsilon
+			a_t[np.argmax(Q_t)] = 1
+
 		if epsilon > FINAL_EPSILON and t > OBSERVE:
 			epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
-	#print(x_t1_colored.shape)
+		x_tc, r_t, T_t = game_state.frame_step(a_t)
+		x_tn = image_preprocess(x_tc)
+		D.append((x_tt, a_t, r_t, x_tn, T_t))
+		x_tt = x_tn
+
+		if len(D) > REPLAY_MEMORY:
+			D.popleft()
+
+		if t % 10000 == 0:
+			model.save('saved_networks/' + 'dqn' + str(t))
+			print("Time : ", t)
 
 
+		if t > OBSERVE:
+			minibatch = random.sample(D, BATCH)
+
+			s_t_batch = np.asarray([d[0] for d in minibatch])
+			a_batch = np.asarray([d[1] for d in minibatch])
+			r_batch = np.asarray([d[2] for d in minibatch])
+			s_tn_batch = np.asarray([d[3] for d in minibatch])
+			t_batch = [d[4] for d in minibatch]
+
+			y_batch = np.zeros(shape=(BATCH,1))
+			y_batch_dummy = np.zeros(shape=(BATCH,1))
+			Q_tn_batch = model.predict([s_tn_batch,a_batch,y_batch_dummy])
+
+			for i in range(0, len(minibatch)):
+				# if terminal, only equals reward
+				if t_batch[i]:
+					y_batch[i] = r_batch[i]
+				else:
+					y_batch[i] = GAMMA * np.max(Q_tn_batch[i])
+			model.fit(x=[s_t_batch,a_batch,y_batch_dummy], y=y_batch,batch_size=32)
 
 def main():
 	train()

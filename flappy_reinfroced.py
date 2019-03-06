@@ -7,6 +7,7 @@ import random
 from collections import deque
 import numpy as np
 from keras import backend as K
+import tensorflow as tf 
 import keras
 import keras.initializers as initializer
 from keras.models import Model
@@ -43,7 +44,7 @@ def custom_loss(fc,a,y):
 
 	# Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
 	def loss(y_true,y_pred):
-		mul = K.sum(multiply([fc,a]),axis=-1)
+		mul = K.sum(K.dot(fc, K.transpose(a)))
 		return K.mean(K.square(mul - y),axis=-1)
    
 	# Return a function
@@ -67,13 +68,12 @@ def network():
 	maxpool3 = MaxPooling2D(pool_size=2, strides=2, padding='same')(conv3)
 	fci = Flatten()(maxpool3)
 	fc1 = Dense(256, activation='relu')(fci)
-	fc2 = Dense(ACTIONS, activation='softmax')(fc1)
+	fc2 = Dense(ACTIONS, activation='linear')(fc1)
 
 	model = Model([inputs,a,y], fc2)
 	model.compile(optimizer='adam',loss=custom_loss(fc2,a,y), metrics=['accuracy'])
 	model.summary()
 	return model
-
 
 def train():
 	game_state = game.GameState()
@@ -91,7 +91,6 @@ def train():
 		a = np.asarray([[1,0]])
 		y = np.asarray([[0.0]])
 		readout_t = model.predict([x,a,y])
-		print("output",readout_t)
 		a_t = np.zeros([ACTIONS])
 		action_index = 0
 		if random.random() <= epsilon:

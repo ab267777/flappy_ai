@@ -20,13 +20,15 @@ from keras.models import Sequential, Model
 from functools import reduce
 import math
 import os
+import time
+
 
 ACTIONS = 2 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
-OBSERVE = 50000. # timesteps to observe before training
+OBSERVE = 5000. # timesteps to observe before training
 EXPLORE = 2000000. # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001 # final value of epsilon
-INITIAL_EPSILON = 1 # starting value of epsilon
+INITIAL_EPSILON = 0.2 # starting value of epsilon
 REPLAY_MEMORY = 50000 # number of previous transitions to remember
 BATCH = 32 # size of minibatch
 FRAME_PER_ACTION = 1
@@ -34,6 +36,8 @@ FRAME_PER_ACTION = 1
 def image_preprocess(img):
 	resized = cv2.resize(img, (80, 80))
 	gray =  np.expand_dims(cv2.transpose(cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)), axis=2)
+	r ,t = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+	t = np.reshape(t, (80, 80, 1))
 	#print(x_t.shape, resized.shape)
 	s_t = np.concatenate((resized, gray),axis=2)
 	#print(s_t.shape, resized.shape)
@@ -76,6 +80,7 @@ def network():
 	return model
 
 def train():
+	starttime=time.time()
 	model = network()
 	D = deque()
 	epsilon = INITIAL_EPSILON
@@ -100,6 +105,7 @@ def train():
 		Q_t = model.predict([x_t,dummy_a,dummy_y])[0]
 		
 		if random.random() <= epsilon:
+			print("RANDOM step")
 			a_t[random.randrange(ACTIONS)] = 1
 		else:
 			a_t[np.argmax(Q_t)] = 1
@@ -140,6 +146,7 @@ def train():
 				else:
 					y_batch[i] = GAMMA * np.max(Q_tn_batch[i])
 			model.fit(x=[s_t_batch,a_batch,y_batch_dummy], y=y_batch,batch_size=32)
+		time.sleep(0.1 - ((time.time() - starttime) % 0.1))
 
 def main():
 	train()

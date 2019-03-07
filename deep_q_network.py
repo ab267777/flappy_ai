@@ -80,7 +80,7 @@ def trainNetwork(s, readout, h_fc1, sess):
     a = tf.placeholder("float", [None, ACTIONS])
     y = tf.placeholder("float", [None])
     readout_action = tf.reduce_sum(tf.multiply(readout, a), reduction_indices=1)
-    print(readout_action.shape)
+    
     cost = tf.reduce_mean(tf.square(y - readout_action))
     train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
 
@@ -164,7 +164,6 @@ def trainNetwork(s, readout, h_fc1, sess):
                     y_batch.append(r_batch[i])
                 else:
                     y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
-            print(y_batch)
             # perform gradient step
             train_step.run(feed_dict = {
                 y : y_batch,

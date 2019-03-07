@@ -28,7 +28,7 @@ GAMMA = 0.99 # decay rate of past observations
 OBSERVE = 1000. # timesteps to observe before training
 EXPLORE = 2000000. # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001 # final value of epsilon
-INITIAL_EPSILON = 0.2 # starting value of epsilon
+INITIAL_EPSILON = 0.0001 # starting value of epsilon
 REPLAY_MEMORY = 50000 # number of previous transitions to remember
 BATCH = 32 # size of minibatch
 FRAME_PER_ACTION = 1
@@ -44,12 +44,12 @@ def image_preprocess(img):
 	return s_t
 
 
-def custom_loss(fc,a,y):
+def custom_loss(mul,y):
 
 	# Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
 	def loss(y_true,y_pred):
-		mul = K.sum(K.dot(fc, K.transpose(a)))
-		return K.square(y_true - mul)
+		# print( "==========>", K.shape(mul))
+		return K.square(y - mul)
    
 	# Return a function
 	return loss
@@ -65,17 +65,17 @@ def network():
 	conv2 = Conv2D(filters=64, strides=2, activation='relu',padding='same',use_bias=True, 
 		kernel_size=[4,4], kernel_initializer=initializer.TruncatedNormal(stddev=0.01),
 		bias_initializer=initializer.Constant(value=0.01))(maxpool1)
-	maxpool2 = MaxPooling2D(pool_size=2, strides=2, padding='same')(conv2)
+	#maxpool2 = MaxPooling2D(pool_size=2, strides=2, padding='same')(conv2)
 	conv3 = Conv2D(filters=64, strides=1, activation='relu',padding='same',use_bias=True, 
 		kernel_size=[1,1], kernel_initializer=initializer.TruncatedNormal(stddev=0.01),
-		bias_initializer=initializer.Constant(value=0.01))(maxpool2)
-	maxpool3 = MaxPooling2D(pool_size=2, strides=2, padding='same')(conv3)
-	fci = Flatten()(maxpool3)
-	fc1 = Dense(512, activation='relu',use_bias=True, bias_initializer=initializer.Constant(value=0.01))(fci)
-	fc2 = Dense(ACTIONS, activation='linear',use_bias=True, bias_initializer=initializer.Constant(value=0.01))(fc1)
-
+		bias_initializer=initializer.Constant(value=0.01))(conv2)
+	#maxpool3 = MaxPooling2D(pool_size=2, strides=2, padding='same')(conv3)
+	fci = Flatten()(conv3)
+	fc1 = Dense(512, activation='relu',use_bias=True,kernel_initializer=initializer.TruncatedNormal(stddev=0.01), bias_initializer=initializer.Constant(value=0.01))(fci)
+	fc2 = Dense(ACTIONS, activation='linear',use_bias=True,kernel_initializer=initializer.TruncatedNormal(stddev=0.01), bias_initializer=initializer.Constant(value=0.01))(fc1)
+	mul = K.sum(K.dot(fc2, K.transpose(a)),axis = 0)
 	model = Model([inputs,a,y], fc2)
-	model.compile(optimizer='adam',loss=custom_loss(fc2,a,y), metrics=['accuracy'])
+	model.compile(optimizer='adam',loss=custom_loss(mul,y))
 	model.summary()
 	return model
 
@@ -138,7 +138,7 @@ def train():
 			y_batch = np.zeros(BATCH)
 			y_batch_dummy = np.zeros(BATCH)
 			Q_tn_batch = model.predict([s_tn_batch,a_batch,y_batch_dummy])
-
+			print(Q_tn_batch)
 			for i in range(0, len(minibatch)):
 				# if terminal, only equals reward
 				if t_batch[i]:
@@ -148,7 +148,7 @@ def train():
 					y_batch[i] = r_batch[i] + GAMMA * np.max(Q_tn_batch[i])
 			#print(y_batch)
 			#break
-			model.fit(x=[s_t_batch,a_batch,y_batch_dummy], y=y_batch,batch_size=32)
+			model.fit(x=[s_t_batch,a_batch,y_batch], y=y_batch,batch_size=32)
 		#time.sleep(0.05 - ((time.time() - starttime) % 0.05))
 		print("TIMESTEP", t ,\
             "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", r_t, \

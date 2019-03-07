@@ -25,7 +25,7 @@ import time
 
 ACTIONS = 2 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
-OBSERVE = 5000. # timesteps to observe before training
+OBSERVE = 1000. # timesteps to observe before training
 EXPLORE = 2000000. # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001 # final value of epsilon
 INITIAL_EPSILON = 0.2 # starting value of epsilon
@@ -49,7 +49,7 @@ def custom_loss(fc,a,y):
 	# Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
 	def loss(y_true,y_pred):
 		mul = K.sum(K.dot(fc, K.transpose(a)))
-		return K.mean(K.square(mul - y),axis=-1)
+		return K.square(y_true - mul)
    
 	# Return a function
 	return loss
@@ -71,8 +71,8 @@ def network():
 		bias_initializer=initializer.Constant(value=0.01))(maxpool2)
 	maxpool3 = MaxPooling2D(pool_size=2, strides=2, padding='same')(conv3)
 	fci = Flatten()(maxpool3)
-	fc1 = Dense(256, activation='relu')(fci)
-	fc2 = Dense(ACTIONS, activation='linear')(fc1)
+	fc1 = Dense(512, activation='relu',use_bias=True, bias_initializer=initializer.Constant(value=0.01))(fci)
+	fc2 = Dense(ACTIONS, activation='linear',use_bias=True, bias_initializer=initializer.Constant(value=0.01))(fc1)
 
 	model = Model([inputs,a,y], fc2)
 	model.compile(optimizer='adam',loss=custom_loss(fc2,a,y), metrics=['accuracy'])
@@ -106,10 +106,10 @@ def train():
 		
 		if random.random() <= epsilon:
 			print("RANDOM step")
-			a_t[random.randrange(ACTIONS)] = 1
+			action_index = random.randrange(ACTIONS)
 		else:
-			a_t[np.argmax(Q_t)] = 1
-
+			action_index = np.argmax(Q_t)
+		a_t[action_index] = 1
 		if epsilon > FINAL_EPSILON and t > OBSERVE:
 			epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
@@ -135,18 +135,24 @@ def train():
 			s_tn_batch = np.asarray([d[3] for d in minibatch])
 			t_batch = [d[4] for d in minibatch]
 
-			y_batch = np.zeros(shape=(BATCH,1))
-			y_batch_dummy = np.zeros(shape=(BATCH,1))
+			y_batch = np.zeros(BATCH)
+			y_batch_dummy = np.zeros(BATCH)
 			Q_tn_batch = model.predict([s_tn_batch,a_batch,y_batch_dummy])
 
 			for i in range(0, len(minibatch)):
 				# if terminal, only equals reward
 				if t_batch[i]:
+					#print("terminal", r_batch[i])
 					y_batch[i] = r_batch[i]
 				else:
-					y_batch[i] = GAMMA * np.max(Q_tn_batch[i])
+					y_batch[i] = r_batch[i] + GAMMA * np.max(Q_tn_batch[i])
+			#print(y_batch)
+			#break
 			model.fit(x=[s_t_batch,a_batch,y_batch_dummy], y=y_batch,batch_size=32)
-		time.sleep(0.1 - ((time.time() - starttime) % 0.1))
+		#time.sleep(0.05 - ((time.time() - starttime) % 0.05))
+		print("TIMESTEP", t ,\
+            "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", r_t, \
+            "/ Q_MAX ", Q_t)
 
 def main():
 	train()

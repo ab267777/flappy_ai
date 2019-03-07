@@ -13,7 +13,7 @@ from collections import deque
 GAME = 'bird' # the name of the game being played for log files
 ACTIONS = 2 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
-OBSERVE = 100000. # timesteps to observe before training
+OBSERVE = 100. # timesteps to observe before training
 EXPLORE = 2000000. # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001 # final value of epsilon
 INITIAL_EPSILON = 0.0001 # starting value of epsilon
@@ -80,6 +80,7 @@ def trainNetwork(s, readout, h_fc1, sess):
     a = tf.placeholder("float", [None, ACTIONS])
     y = tf.placeholder("float", [None])
     readout_action = tf.reduce_sum(tf.multiply(readout, a), reduction_indices=1)
+    print(readout_action.shape)
     cost = tf.reduce_mean(tf.square(y - readout_action))
     train_step = tf.train.AdamOptimizer(1e-6).minimize(cost)
 
@@ -88,10 +89,6 @@ def trainNetwork(s, readout, h_fc1, sess):
 
     # store the previous observations in replay memory
     D = deque()
-
-    # printing
-    a_file = open("logs_" + GAME + "/readout.txt", 'w')
-    h_file = open("logs_" + GAME + "/hidden.txt", 'w')
 
     # get the first state by doing nothing and preprocess the image to 80x80x4
     do_nothing = np.zeros(ACTIONS)
@@ -105,11 +102,11 @@ def trainNetwork(s, readout, h_fc1, sess):
     saver = tf.train.Saver()
     sess.run(tf.initialize_all_variables())
     checkpoint = tf.train.get_checkpoint_state("saved_networks")
-    if checkpoint and checkpoint.model_checkpoint_path:
-        saver.restore(sess, checkpoint.model_checkpoint_path)
-        print("Successfully loaded:", checkpoint.model_checkpoint_path)
-    else:
-        print("Could not find old network weights")
+    # if checkpoint and checkpoint.model_checkpoint_path:
+    #     saver.restore(sess, checkpoint.model_checkpoint_path)
+    #     print("Successfully loaded:", checkpoint.model_checkpoint_path)
+    # else:
+    #     print("Could not find old network weights")
 
     # start training
     epsilon = INITIAL_EPSILON
@@ -167,7 +164,7 @@ def trainNetwork(s, readout, h_fc1, sess):
                     y_batch.append(r_batch[i])
                 else:
                     y_batch.append(r_batch[i] + GAMMA * np.max(readout_j1_batch[i]))
-
+            print(y_batch)
             # perform gradient step
             train_step.run(feed_dict = {
                 y : y_batch,
@@ -194,7 +191,7 @@ def trainNetwork(s, readout, h_fc1, sess):
 
         print("TIMESTEP", t, "/ STATE", state, \
             "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", r_t, \
-            "/ Q_MAX %e" % np.max(readout_t))
+            "/ Q_MAX ", readout_t)
         # write info to files
         '''
         if t % 10000 <= 100:

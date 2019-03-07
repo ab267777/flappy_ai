@@ -25,7 +25,7 @@ import time
 
 ACTIONS = 2 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
-OBSERVE = 1000. # timesteps to observe before training
+OBSERVE = 10000. # timesteps to observe before training
 EXPLORE = 2000000. # frames over which to anneal epsilon
 FINAL_EPSILON = 0.0001 # final value of epsilon
 INITIAL_EPSILON = 0.0001 # starting value of epsilon
@@ -39,7 +39,7 @@ def image_preprocess(img):
 	r ,t = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
 	t = np.reshape(t, (80, 80, 1))
 	#print(x_t.shape, resized.shape)
-	s_t = np.concatenate((resized, gray),axis=2)
+	s_t = np.concatenate((t,t,t,t),axis=2)
 	#print(s_t.shape, resized.shape)
 	return s_t
 

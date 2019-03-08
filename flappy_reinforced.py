@@ -12,6 +12,7 @@ import keras
 import keras.initializers as initializer
 from keras.models import Model
 from keras.layers import *
+from keras.optimizers import *
 from keras.layers.merge import Concatenate
 from keras.layers.pooling import GlobalMaxPooling1D
 from keras.activations import *
@@ -25,9 +26,9 @@ import time
 
 ACTIONS = 2 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
-OBSERVE = 10000. # timesteps to observe before training
+OBSERVE = 50000. # timesteps to observe before training
 EXPLORE = 2000000. # frames over which to anneal epsilon
-FINAL_EPSILON = 0.0001 # final value of epsilon
+FINAL_EPSILON = 0.01 # final value of epsilon
 INITIAL_EPSILON = 0.0001 # starting value of epsilon
 REPLAY_MEMORY = 50000 # number of previous transitions to remember
 BATCH = 32 # size of minibatch
@@ -43,21 +44,21 @@ def image_preprocess(img):
 	#print(s_t.shape, resized.shape)
 	return s_t
 
-
 def custom_loss(mul,y):
 
 	# Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
 	def loss(y_true,y_pred):
-		# print( "==========>", K.shape(mul))
-		return K.square(y - mul)
+		L = K.square(y - mul)
+		#print( "==========>", K.shape(L),  "==========>", K.shape(y),  "==========>", K.shape(mul))
+		return L
    
 	# Return a function
 	return loss
 
 def network():
 	inputs = Input((80,80,4))
-	a = Input(shape=[2])
-	y = Input(shape=[1])
+	a = Input(shape=(ACTIONS,))
+	y = Input(shape=(1,),dtype = float)
 	conv1 = Conv2D(filters=32, strides=4, activation='relu',padding='same',use_bias=True, 
 		kernel_size=[8,8], kernel_initializer=initializer.TruncatedNormal(stddev=0.01),
 		bias_initializer=initializer.Constant(value=0.01))(inputs)
@@ -73,9 +74,13 @@ def network():
 	fci = Flatten()(conv3)
 	fc1 = Dense(512, activation='relu',use_bias=True,kernel_initializer=initializer.TruncatedNormal(stddev=0.01), bias_initializer=initializer.Constant(value=0.01))(fci)
 	fc2 = Dense(ACTIONS, activation='linear',use_bias=True,kernel_initializer=initializer.TruncatedNormal(stddev=0.01), bias_initializer=initializer.Constant(value=0.01))(fc1)
-	mul = K.sum(K.dot(fc2, K.transpose(a)),axis = 0)
+	
+	mask = Dot(axes=1)([fc2,a])
+	#print("##mask#",mask)
+	#mul = K.sum(K.dot(fc2, a),axis = 1,keepdims=True)
 	model = Model([inputs,a,y], fc2)
-	model.compile(optimizer='adam',loss=custom_loss(mul,y))
+	opt = Adam(lr=0.000001)
+	model.compile(optimizer=opt,loss=custom_loss(mask,y))
 	model.summary()
 	return model
 
@@ -137,8 +142,7 @@ def train():
 
 			y_batch = np.zeros(BATCH)
 			y_batch_dummy = np.zeros(BATCH)
-			Q_tn_batch = model.predict([s_tn_batch,a_batch,y_batch_dummy])
-			print(Q_tn_batch)
+			Q_tn_batch = model.predict_on_batch([s_tn_batch,a_batch,y_batch_dummy])
 			for i in range(0, len(minibatch)):
 				# if terminal, only equals reward
 				if t_batch[i]:

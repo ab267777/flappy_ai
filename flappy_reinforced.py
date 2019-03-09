@@ -13,26 +13,24 @@ import keras.initializers as initializer
 from keras.models import Model
 from keras.layers import *
 from keras.optimizers import *
-from keras.layers.merge import Concatenate
-from keras.layers.pooling import GlobalMaxPooling1D
 from keras.activations import *
-from keras.utils import to_categorical
 from keras.models import Sequential, Model
 from functools import reduce
 import math
 import os
-import time
+from keras.models import load_model
+import keras.losses
 
 
 ACTIONS = 2 # number of valid actions
 GAMMA = 0.99 # decay rate of past observations
 OBSERVE = 50000. # timesteps to observe before training
 EXPLORE = 2000000. # frames over which to anneal epsilon
-FINAL_EPSILON = 0.01 # final value of epsilon
+FINAL_EPSILON = 0.1 # final value of epsilon
 INITIAL_EPSILON = 0.0001 # starting value of epsilon
 REPLAY_MEMORY = 50000 # number of previous transitions to remember
-BATCH = 32 # size of minibatch
-FRAME_PER_ACTION = 1
+BATCH = 32 # minibatch size
+
 	
 def image_preprocess(img):
 	resized = cv2.resize(img, (80, 80))
@@ -45,15 +43,12 @@ def image_preprocess(img):
 	return s_t
 
 def custom_loss(mul,y):
-
-	# Create a loss function that adds the MSE loss to the mean of all squared activations of a specific layer
 	def loss(y_true,y_pred):
 		L = K.square(y - mul)
-		#print( "==========>", K.shape(L),  "==========>", K.shape(y),  "==========>", K.shape(mul))
 		return L
-   
 	# Return a function
 	return loss
+
 
 def network():
 	inputs = Input((80,80,4))
@@ -76,17 +71,20 @@ def network():
 	fc2 = Dense(ACTIONS, activation='linear',use_bias=True,kernel_initializer=initializer.TruncatedNormal(stddev=0.01), bias_initializer=initializer.Constant(value=0.01))(fc1)
 	
 	mask = Dot(axes=1)([fc2,a])
-	#print("##mask#",mask)
-	#mul = K.sum(K.dot(fc2, a),axis = 1,keepdims=True)
+
 	model = Model([inputs,a,y], fc2)
-	opt = Adam(lr=0.000001)
+	
+	opt = Adam(lr=0.0001)
 	model.compile(optimizer=opt,loss=custom_loss(mask,y))
+	
 	model.summary()
 	return model
 
 def train():
-	starttime=time.time()
+	B = int(input('Press 0 if you want to train from start or 1 if you want to test : '))
 	model = network()
+	if B==1:
+		model.load_weights("trained_model/dell-dqn.h5")
 	D = deque()
 	epsilon = INITIAL_EPSILON
 	game_state = game.GameState()
@@ -115,48 +113,49 @@ def train():
 		else:
 			action_index = np.argmax(Q_t)
 		a_t[action_index] = 1
+
 		if epsilon > FINAL_EPSILON and t > OBSERVE:
 			epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE
 
 		x_tc, r_t, T_t = game_state.frame_step(a_t)
+		
 		x_tn = image_preprocess(x_tc)
 		D.append((x_tt, a_t, r_t, x_tn, T_t))
+		
 		x_tt = x_tn
 
 		if len(D) > REPLAY_MEMORY:
 			D.popleft()
 
-		if t % 10000 == 0:
-			model.save('saved_networks/' + 'dqn' + str(t))
-			print("Time : ", t)
+		if B != 1:
+			if t % 25000 == 0:
+				model.save_weights('saved_networks/' + 'dqn' + str(t)+'.h5')
+				print("Time : ", t)
 
 
-		if t > OBSERVE:
-			minibatch = random.sample(D, BATCH)
+			if t > OBSERVE:
+				minibatch = random.sample(D, BATCH)
 
-			s_t_batch = np.asarray([d[0] for d in minibatch])
-			a_batch = np.asarray([d[1] for d in minibatch])
-			r_batch = np.asarray([d[2] for d in minibatch])
-			s_tn_batch = np.asarray([d[3] for d in minibatch])
-			t_batch = [d[4] for d in minibatch]
+				s_t_batch = np.asarray([d[0] for d in minibatch])
+				a_batch = np.asarray([d[1] for d in minibatch])
+				r_batch = np.asarray([d[2] for d in minibatch])
+				s_tn_batch = np.asarray([d[3] for d in minibatch])
+				t_batch = [d[4] for d in minibatch]
 
-			y_batch = np.zeros(BATCH)
-			y_batch_dummy = np.zeros(BATCH)
-			Q_tn_batch = model.predict_on_batch([s_tn_batch,a_batch,y_batch_dummy])
-			for i in range(0, len(minibatch)):
-				# if terminal, only equals reward
-				if t_batch[i]:
-					#print("terminal", r_batch[i])
-					y_batch[i] = r_batch[i]
-				else:
-					y_batch[i] = r_batch[i] + GAMMA * np.max(Q_tn_batch[i])
-			#print(y_batch)
-			#break
-			model.fit(x=[s_t_batch,a_batch,y_batch], y=y_batch,batch_size=32)
-		#time.sleep(0.05 - ((time.time() - starttime) % 0.05))
-		print("TIMESTEP", t ,\
-            "/ EPSILON", epsilon, "/ ACTION", action_index, "/ REWARD", r_t, \
-            "/ Q_MAX ", Q_t)
+				y_batch = np.zeros(BATCH)
+				y_batch_dummy = np.zeros(BATCH)
+				Q_tn_batch = model.predict_on_batch([s_tn_batch,a_batch,y_batch_dummy])
+				for i in range(0, len(minibatch)):
+					if t_batch[i]:
+						#print("terminal", r_batch[i])
+						y_batch[i] = r_batch[i]
+					else:
+						y_batch[i] = r_batch[i] + GAMMA * np.max(Q_tn_batch[i])
+				#print(y_batch)
+				#break
+				model.fit(x=[s_t_batch,a_batch,y_batch], y=y_batch,batch_size=32,verbose=0)
+
+		print("T:", t ,"| EPS:", epsilon, "| A", action_index, "| R", r_t, "| Q ", Q_t)
 
 def main():
 	train()

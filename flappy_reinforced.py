@@ -42,6 +42,8 @@ def image_preprocess(img):
 	#print(s_t.shape, resized.shape)
 	return s_t
 
+
+## Custom Loss function using keras layers as input
 def custom_loss(mul,y):
 	def loss(y_true,y_pred):
 		L = K.square(y - mul)
@@ -105,8 +107,10 @@ def train():
 		dummy_y = np.asarray([[0.0]])
 		action_index = 0
 		
-		Q_t = model.predict([x_t,dummy_a,dummy_y])[0]
+		Q_t = model.predict([x_t,dummy_a,dummy_y])[0]  ## Model prediction using current image
 		
+		## Choosing action
+
 		if random.random() <= epsilon:
 			print("RANDOM step")
 			action_index = random.randrange(ACTIONS)
@@ -120,7 +124,7 @@ def train():
 		x_tc, r_t, T_t = game_state.frame_step(a_t)
 		
 		x_tn = image_preprocess(x_tc)
-		D.append((x_tt, a_t, r_t, x_tn, T_t))
+		D.append((x_tt, a_t, r_t, x_tn, T_t))	# Maintaining replay memory
 		
 		x_tt = x_tn
 
@@ -129,11 +133,14 @@ def train():
 
 		if B != 1:
 			if t % 25000 == 0:
-				model.save_weights('saved_networks/' + 'dqn' + str(t)+'.h5')
+				model.save_weights('trained_model/' + 'dqn' + str(t)+'.h5')
 				print("Time : ", t)
 
 
 			if t > OBSERVE:
+
+				## Sampling mini batch at random to train 
+				
 				minibatch = random.sample(D, BATCH)
 
 				s_t_batch = np.asarray([d[0] for d in minibatch])

@@ -86,7 +86,7 @@ def train():
 	B = int(input('Press 0 if you want to train from start or 1 if you want to test : '))
 	model = network()
 	if B==1:
-		model.load_weights("trained_model/dell-dqn.h5")
+		model.load_weights("trained_model/dell-4410000.h5")
 	D = deque()
 	epsilon = INITIAL_EPSILON
 	game_state = game.GameState()
